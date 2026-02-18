@@ -1,0 +1,254 @@
+# SPDX-FileCopyrightText: 2023 - 2024 Nikita Chernyi
+# SPDX-FileCopyrightText: 2023 - 2025 MASH project contributors
+# SPDX-FileCopyrightText: 2023 - 2025 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2023 Niels Bouma
+# SPDX-FileCopyrightText: 2024 Sergio Durigan Junior
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+# Project source code URL: https://github.com/ergochat/ergo
+
+ergo_enabled: true
+
+ergo_identifier: ergo
+ergo_base_path: "/{{ ergo_identifier }}"
+ergo_data_path: "{{ ergo_base_path }}/data"
+
+# renovate: datasource=docker depName=ghcr.io/ergochat/ergo
+ergo_version: v2.17.0
+
+ergo_uid: ""
+ergo_gid: ""
+
+# The hostname at which Ergo is served.
+ergo_hostname: ""
+
+ergo_container_image: "{{ ergo_container_image_registry_prefix }}ergochat/ergo:{{ ergo_container_image_tag }}"
+ergo_container_image_tag: "{{ ergo_version }}"
+ergo_container_image_registry_prefix: "{{ ergo_container_image_registry_prefix_upstream }}"
+ergo_container_image_registry_prefix_upstream: "{{ ergo_container_image_registry_prefix_upstream_default }}"
+ergo_container_image_registry_prefix_upstream_default: ghcr.io/
+ergo_container_image_force_pull: "{{ ergo_container_image.endswith(':latest') }}"
+
+ergo_container_image_self_build: false
+ergo_container_image_self_build_name: "ergochat/ergo:{{ ergo_container_image_self_build_repo_version }}"
+ergo_container_image_self_build_repo: "https://github.com/ergochat/ergo.git"
+ergo_container_image_self_build_repo_version: "{{ ergo_version if ergo_version != 'latest' else 'main' }}"
+ergo_container_image_self_build_src_files_path: "{{ ergo_base_path }}/docker-src"
+
+# The base container network. It will be auto-created by this role if it doesn't exist already.
+ergo_container_network: "{{ ergo_identifier }}"
+
+# Control if the container network is deleted on uninstalling.
+ergo_container_network_deletion_enabled: true
+
+# Specify how the container publishes its TCP port (as defined by `ergo_container_tcp_port`).
+#
+# Takes an "<ip>:<port>" or "<port>" value (e.g. "127.0.0.1:2586"), or empty string to not expose.
+ergo_container_tcp_host_bind_port: ""
+
+# Specify how the container publishes its TCP port (as defined by `ergo_container_tcp_tls_port`).
+#
+# Takes an "<ip>:<port>" or "<port>" value (e.g. "127.0.0.1:2586"), or empty string to not expose.
+ergo_container_tcp_tls_host_bind_port: "{{ ergo_container_tcp_tls_port }}"
+
+# The port number in the container
+ergo_container_tcp_port: 6667
+
+# The port number in the container
+ergo_container_tcp_tls_port: 6697
+
+# A list of additional container networks that the container would be connected to.
+# The role does not create these networks, so make sure they already exist.
+# Use this to expose this container to another reverse proxy, which runs in a different container network.
+ergo_container_additional_networks: "{{ ergo_container_additional_networks_auto + ergo_container_additional_networks_custom }}"
+ergo_container_additional_networks_auto: []
+ergo_container_additional_networks_custom: []
+
+# A list of additional "volumes" to mount in the container.
+# This list gets populated dynamically at runtime. You can provide a different default value,
+# if you wish to mount your own files into the container.
+# Contains definition objects like this: `{"type": "bind", "src": "/outside", "dst": "/inside", "options": "readonly"}.
+# See the `--mount` documentation for the `docker run` command.
+ergo_container_additional_volumes: "{{ ergo_container_additional_volumes_auto + ergo_container_additional_volumes_custom }}"
+ergo_container_additional_volumes_auto: []
+ergo_container_additional_volumes_custom: []
+
+# ergo_container_labels_traefik_enabled controls whether labels to assist a Traefik reverse-proxy will be attached to the container.
+# See `../templates/labels.j2` for details.
+#
+# To inject your own other container labels, see `ergo_container_labels_additional_labels_custom`.
+ergo_container_labels_traefik_enabled: true
+ergo_container_labels_traefik_docker_network: "{{ ergo_container_network }}"
+ergo_container_labels_traefik_hostname: "{{ ergo_hostname }}"
+ergo_container_labels_traefik_rule: "HostSNI(`{{ ergo_container_labels_traefik_hostname }}`)"
+ergo_container_labels_traefik_priority: 0
+ergo_container_labels_traefik_entrypoints: irc-secure
+ergo_container_labels_traefik_tls: "{{ ergo_container_labels_traefik_entrypoints != 'irc' }}"
+ergo_container_labels_traefik_tls_certResolver: default  # noqa var-naming
+
+# Specify `serversTransport` for TCP router
+# See: https://doc.traefik.io/traefik/reference/routing-configuration/tcp/serverstransport/
+ergo_container_labels_traefik_loadbalancer_serverstransport: ""
+
+# ergo_container_labels_additional_labels contains a multiline string with additional labels to add to the container label file.
+# See `../templates/labels.j2` for details.
+# To add your own custom labels, use `ergo_container_labels_additional_labels_custom`
+#
+# Example:
+# ergo_container_labels_additional_labels_custom:
+#   - my.label=1
+#   - another.label="here"
+ergo_container_labels_additional_labels: "{{ ergo_container_labels_additional_labels_auto + ergo_container_labels_additional_labels_custom }}"
+ergo_container_labels_additional_labels_auto: []
+ergo_container_labels_additional_labels_custom: []
+
+# Specify the size of the container's tmpfs volume
+ergo_container_tmpfs_tmp_size: 128m
+
+# A list of extra arguments to pass to the container (`docker create` command)
+ergo_container_extra_arguments: "{{ ergo_container_extra_arguments_auto + ergo_container_extra_arguments_custom }}"
+ergo_container_extra_arguments_auto: []
+ergo_container_extra_arguments_custom: []
+
+# List of systemd services that the Ergo systemd service depends on
+ergo_systemd_required_services_list: "{{ ergo_systemd_required_services_list_default + ergo_systemd_required_services_list_auto + ergo_systemd_required_services_list_custom }}"
+ergo_systemd_required_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
+ergo_systemd_required_services_list_auto: []
+ergo_systemd_required_services_list_custom: []
+
+# List of systemd services that the Ergo systemd service wants
+ergo_systemd_wanted_services_list: "{{ ergo_systemd_wanted_services_list_default + ergo_systemd_wanted_services_list_auto + ergo_systemd_wanted_services_list_custom }}"
+ergo_systemd_wanted_services_list_default: []
+ergo_systemd_wanted_services_list_auto: []
+ergo_systemd_wanted_services_list_custom: []
+
+ergo_database_mysql_hostname: ""
+ergo_database_mysql_port: 3306
+ergo_database_mysql_username: ergo
+ergo_database_mysql_password: ""
+ergo_database_name_history: ergo_history
+
+# Control if custom configuration file is used
+# Set to `true` to avoid mounting the default ircd.yaml.j2
+ergo_config_custom_enabled: false
+
+# Control if PROXY protocol is enabled for the end user's IP being passed through to Ergo
+# See: https://github.com/ergochat/ergo/blob/master/docs/MANUAL.md#reverse-proxies
+ergo_config_proxy_enabled: true
+
+# Specify the name of the network in a human-readable name that identifies your network without spaces or special characters
+ergo_config_network_name: ""
+
+# Specify the server name
+# By default it is set to the domain name
+ergo_config_server_name: "{{ ergo_hostname }}"
+
+# Specify the valid TLS certificate
+ergo_config_server_listeners_standard_tls_cert: ""
+ergo_config_server_listeners_standard_tls_key: ""
+
+# Specify the shared password (the IRC `PASS` command) to connect to the server
+# It can be created by running `ergo genpasswd` or `htpasswd -nbB '' PLAIN_PASSWORD_HERE | tr -d ':\n'`
+ergo_config_server_password: ""
+
+# Control if IP cloaking is enabled
+ergo_config_server_ipcloaking_enabled: true
+
+# Specify the fake TLD at the end of the hostname for cloaked IPs
+ergo_config_server_ipcloaking_netname: irc
+
+# Control if users can register new accounts for themselves
+ergo_config_accounts_registration_enabled: false
+
+# Control if authenticatting with SASL only is allowed
+ergo_config_accounts_skipserverpassword: "{{ true if ergo_config_server_password != '' }}"
+
+# Control if logging in to accounts via the PASS command is enabled
+ergo_config_accounts_loginviapasscommand: "{{ true if ergo_config_server_password != '' }}"
+
+# Control if vhosts are allowed
+ergo_config_accounts_vhosts_enabled: true
+
+# Specify modes that are set when new channels are created
+ergo_config_channels_defaultmodes: +ntC
+
+# Control if users can register new channels
+ergo_config_channels_registration_enabled: true
+
+# Control if only operators can register new channels
+ergo_config_channels_registration_operatoronly: false
+
+# Specify the default operator name
+ergo_config_opers_adminname: admin
+
+# Specify IRC operator ("oper", "ircop") password hash
+# This is a random value, and should be replaced with the one which can be created by running `ergo genpasswd` or `htpasswd -nbB '' PLAIN_PASSWORD_HERE | tr -d ':\n'`
+ergo_config_opers_admin_password: "$2a$04$0123456789abcdef0123456789abcdef0123456789abcdef01234"
+
+# Specify a log level
+# Valid values: debug, error, info, warn
+ergo_config_logging_level: info
+
+# Control if persistent history is saved to a MySQL database
+ergo_config_datastore_mysql_enabled: false
+
+# Specify default language to use for new clients
+ergo_config_languages_default: en
+
+# Control if fakelag to prevent clients from spamming commands too rapidly is enabled
+ergo_config_fakelag_enabled: true
+
+# Control if the roleplay commands are allowed
+ergo_config_roleplay_enabled: false
+
+# Control if messages are stored for later playback
+# Before enabling it, make sure to understand its consequence from the viewpoint of laws like GDPR
+# Note this is automatically set to `true` if `ergo_config_history_persistent_enabled` is set to true
+ergo_config_history_enabled: "{{ ergo_config_history_persistent_enabled }}"
+
+# Control if history messages is stored in a persistent database
+ergo_config_history_persistent_enabled: false
+
+# Control if unregistered channel messages is stored in the persistent database
+ergo_config_history_persistent_unregisteredchannels: false
+
+# Default Ergo configuration template which covers the generic use case.
+# You can customize it by controlling the various variables inside it.
+#
+# For a more advanced customization, you can extend the default (see `ergo_configuration_yaml`)
+# or completely replace this variable with your own template.
+ergo_configuration_yaml: "{{ lookup('template', 'templates/ircd.yaml.j2') }}"
+
+ergo_configuration_extension_yaml: |
+  # Your custom YAML configuration for Ergo goes here.
+  # This configuration extends the default starting configuration (`ergo_configuration_yaml`).
+  #
+  # You can override individual variables from the default configuration, or introduce new ones.
+  #
+  # If you need something more special, you can take full control by
+  # completely redefining `ergo_configuration_yaml`.
+
+ergo_configuration_extension: "{{ ergo_configuration_extension_yaml | from_yaml if ergo_configuration_extension_yaml | from_yaml is mapping else {} }}"
+
+# Holds the final Ergo configuration (a combination of the default and its extension).
+# You most likely don't need to touch this variable. Instead, see `ergo_configuration_yaml`.
+ergo_configuration: "{{ ergo_configuration_yaml | from_yaml | combine(ergo_configuration_extension, recursive=True) }}"
+
+# Specify the timezone
+ergo_environment_variables_tz: UTC
+
+# Additional environment variables.
+ergo_environment_variables_additional_variables: ""
+
+# ergo_restart_necessary controls whether the Ergo systemd
+# service will be restarted (when true) or merely started (when false) by the
+# systemd service manager role (when conditional restart is enabled).
+#
+# This value is automatically computed during installation based on whether
+# any configuration files, the systemd service file, or the container image changed.
+# The default of `false` means "no restart needed" — appropriate when the role's
+# installation tasks haven't run (e.g., due to --tags skipping them).
+ergo_restart_necessary: false

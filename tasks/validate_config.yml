@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Fail if required Ergo settings not defined
+  ansible.builtin.fail:
+    msg: >-
+      You need to define a required configuration setting (`{{ item }}`).
+  when: "item.when | bool and lookup('vars', item.name, default='') | string | length == 0"
+  with_items:
+    - { "name": "ergo_uid", when: true }
+    - { "name": "ergo_gid", when: true }
+    - { "name": "ergo_hostname", when: true }
+    - { "name": "ergo_container_network", when: true }
+    - { "name": "ergo_config_network_name", when: "{{ not ergo_config_custom_enabled }}" }
+
+- name: Fail if required Ergo + MySQL integration settings not defined
+  ansible.builtin.fail:
+    msg: >-
+      You need to define a required configuration setting (`{{ item }}`) when `ergo_config_datastore_mysql_enabled` is set to `true`
+  when: "ergo_config_datastore_mysql_enabled and lookup('vars', item, default='') | string | length == 0"
+  with_items:
+    - ergo_database_mysql_hostname
+    - ergo_database_mysql_password
+
+- name: Run if Traefik is enabled
+  when: ergo_container_labels_traefik_enabled | bool
+  block:
+    - name: Fail if Traefik settings required for Ergo are not defined
+      ansible.builtin.fail:
+        msg: >-
+          You need to define a required configuration setting (`{{ item }}`).
+      when: "lookup('vars', item, default='') | string | length == 0"
+      with_items:
+        - ergo_container_labels_traefik_hostname

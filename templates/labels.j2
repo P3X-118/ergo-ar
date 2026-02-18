@@ -1,0 +1,41 @@
+{#
+SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+SPDX-FileCopyrightText: 2025 Suguru Hirahara
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+#}
+
+{% if ergo_container_labels_traefik_enabled %}
+traefik.enable=true
+
+{% if ergo_container_labels_traefik_docker_network %}
+traefik.docker.network={{ ergo_container_labels_traefik_docker_network }}
+{% endif %}
+
+{% set middlewares = [] %}
+
+traefik.tcp.routers.{{ ergo_identifier }}.rule={{ ergo_container_labels_traefik_rule }}
+{% if ergo_container_labels_traefik_priority | int > 0 %}
+traefik.tcp.routers.{{ ergo_identifier }}.priority={{ ergo_container_labels_traefik_priority }}
+{% endif %}
+traefik.tcp.routers.{{ ergo_identifier }}.service={{ ergo_identifier }}
+{% if middlewares | length > 0 %}
+traefik.tcp.routers.{{ ergo_identifier }}.middlewares={{ middlewares | join(',') }}
+{% endif %}
+traefik.tcp.routers.{{ ergo_identifier }}.entrypoints={{ ergo_container_labels_traefik_entrypoints }}
+traefik.tcp.routers.{{ ergo_identifier }}.tls={{ ergo_container_labels_traefik_tls | to_json }}
+{% if ergo_container_labels_traefik_tls %}
+traefik.tcp.routers.{{ ergo_identifier }}.tls.certResolver={{ ergo_container_labels_traefik_tls_certResolver }}
+{% endif %}
+
+traefik.tcp.services.{{ ergo_identifier }}.loadbalancer.server.port={{ ergo_container_tcp_port }}
+
+{% if ergo_config_proxy_enabled %}
+traefik.tcp.services.{{ ergo_identifier }}.loadbalancer.serversTransport={{ ergo_container_labels_traefik_loadbalancer_serverstransport }}
+{% endif %}
+
+{% endif %}
+
+{% for arg in ergo_container_labels_additional_labels %}
+{{ arg }}
+{% endfor %}

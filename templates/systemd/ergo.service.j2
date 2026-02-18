@@ -1,0 +1,69 @@
+{#
+SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+SPDX-FileCopyrightText: 2024 Nikita Chernyi
+SPDX-FileCopyrightText: 2025 Suguru Hirahara
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+#}
+
+[Unit]
+Description=Ergo ({{ ergo_identifier }})
+{% for service in ergo_systemd_required_services_list %}
+Requires={{ service }}
+After={{ service }}
+{% endfor %}
+{% for service in ergo_systemd_wanted_services_list %}
+Wants={{ service }}
+{% endfor %}
+DefaultDependencies=no
+
+[Service]
+Type=simple
+Environment="HOME={{ devture_systemd_docker_base_systemd_unit_home_path }}"
+ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} stop -t {{ devture_systemd_docker_base_container_stop_grace_time_seconds }} {{ ergo_identifier }} 2>/dev/null || true'
+ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ ergo_identifier }} 2>/dev/null || true'
+
+ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
+      --rm \
+      --name={{ ergo_identifier }} \
+      --log-driver=none \
+      --user={{ ergo_uid }}:{{ ergo_gid }} \
+      --cap-drop=ALL \
+      --read-only \
+      --network={{ ergo_container_network }} \
+      {% if ergo_container_tcp_host_bind_port and not ergo_container_labels_traefik_enabled %}
+      -p {{ ergo_container_tcp_host_bind_port }}:{{ ergo_container_tcp_port }} \
+      {% endif %}
+      {% if ergo_container_tcp_tls_host_bind_port and not ergo_container_labels_traefik_enabled %}
+      -p {{ ergo_container_tcp_tls_host_bind_port }}:{{ ergo_container_tcp_tls_port }} \
+      {% endif %}
+      --env-file={{ ergo_base_path }}/env \
+      --label-file={{ ergo_base_path }}/labels \
+      {% if not ergo_config_custom_enabled %}
+      --mount type=bind,src={{ ergo_base_path }}/ircd.yaml,dst=/ircd/ircd.yaml,ro \
+      {% endif %}
+      --mount type=bind,src={{ ergo_data_path }},dst=/ircd \
+      {% for volume in ergo_container_additional_volumes %}
+      --mount type={{ volume.type | default('bind' if '/' in volume.src else 'volume') }},src={{ volume.src }},dst={{ volume.dst }}{{ (',' + volume.options) if volume.options else '' }} \
+      {% endfor %}
+      --tmpfs=/tmp:rw,noexec,nosuid,size={{ ergo_container_tmpfs_tmp_size }} \
+      {% for arg in ergo_container_extra_arguments %}
+      {{ arg }} \
+      {% endfor %}
+      {{ ergo_container_image_self_build_name if ergo_container_image_self_build else ergo_container_image }}
+
+{% for network in ergo_container_additional_networks %}
+ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} network connect {{ network }} {{ ergo_identifier }}
+{% endfor %}
+
+ExecStart={{ devture_systemd_docker_base_host_command_docker }} start --attach {{ ergo_identifier }}
+
+ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} stop -t {{ devture_systemd_docker_base_container_stop_grace_time_seconds }} {{ ergo_identifier }} 2>/dev/null || true'
+ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ ergo_identifier }} 2>/dev/null || true'
+
+Restart=always
+RestartSec=30
+SyslogIdentifier={{ ergo_identifier }}
+
+[Install]
+WantedBy=multi-user.target

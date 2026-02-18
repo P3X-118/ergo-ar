@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: 2023 - 2025 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Ensure Ergo paths exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0750"
+    owner: "{{ ergo_uid }}"
+    group: "{{ ergo_gid }}"
+  with_items:
+    - "{{ ergo_base_path }}"
+    - "{{ ergo_data_path }}"
+
+- name: Ensure Ergo support files installed
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/{{ item }}.j2"
+    dest: "{{ ergo_base_path }}/{{ item }}"
+    mode: "0640"
+    owner: "{{ ergo_uid }}"
+    group: "{{ ergo_gid }}"
+  with_items:
+    - env
+    - labels
+  register: ergo_support_files_result
+
+- name: Ensure Ergo configuration file installed
+  when: "not ergo_config_custom_enabled | bool"
+  ansible.builtin.copy:
+    content: "{{ ergo_configuration | to_nice_yaml(indent=2, width=999999) }}"
+    dest: "{{ ergo_base_path }}/ircd.yaml"
+    mode: "0640"
+    owner: "{{ ergo_uid }}"
+    group: "{{ ergo_gid }}"
+  register: ergo_config_file_result
+
+- name: Run if self-building of Ergo container image is not enabled
+  when: "not ergo_container_image_self_build | bool"
+  block:
+    - name: Ensure Ergo container image is pulled via community.docker.docker_image
+      when: devture_systemd_docker_base_container_image_pull_method == 'ansible-module'
+      community.docker.docker_image:
+        name: "{{ ergo_container_image }}"
+        source: "{{ 'pull' if ansible_version.major > 2 or ansible_version.minor > 7 else omit }}"
+        force_source: "{{ ergo_container_image_force_pull if ansible_version.major > 2 or ansible_version.minor >= 8 else omit }}"
+        force: "{{ omit if ansible_version.major > 2 or ansible_version.minor >= 8 else ergo_container_image_force_pull }}"
+      register: ergo_container_image_pull_result
+      retries: "{{ devture_playbook_help_container_retries_count }}"
+      delay: "{{ devture_playbook_help_container_retries_delay }}"
+      until: ergo_container_image_pull_result is not failed
+
+    - name: Ensure Ergo container image is pulled via ansible.builtin.command
+      when: devture_systemd_docker_base_container_image_pull_method == 'command'
+      ansible.builtin.command:
+        cmd: "{{ devture_systemd_docker_base_host_command_docker }} pull {{ ergo_container_image }}"
+      register: ergo_container_image_pull_result
+      retries: "{{ devture_playbook_help_container_retries_count }}"
+      delay: "{{ devture_playbook_help_container_retries_delay }}"
+      until: ergo_container_image_pull_result is not failed
+      changed_when: "'Downloaded newer image' in ergo_container_image_pull_result.stdout"
+
+- name: Run if self-building of Ergo container image is enabled
+  when: "ergo_container_image_self_build | bool"
+  block:
+    - name: Ensure Ergo repository is present on self-build
+      ansible.builtin.git:
+        repo: "{{ ergo_container_image_self_build_repo }}"
+        version: "{{ ergo_container_image_self_build_repo_version }}"
+        dest: "{{ ergo_container_image_self_build_src_files_path }}"
+        force: "yes"
+      register: ergo_git_pull_results
+
+    - name: Ensure Ergo container image is built
+      community.docker.docker_image:
+        name: "{{ ergo_container_image_self_build_name }}"
+        source: build
+        force_source: "{{ ergo_git_pull_results.changed if ansible_version.major > 2 or ansible_version.minor >= 8 else omit }}"
+        force: "{{ omit if ansible_version.major > 2 or ansible_version.minor >= 8 else ergo_git_pull_results.changed }}"
+        build:
+          dockerfile: Dockerfile
+          path: "{{ ergo_container_image_self_build_src_files_path }}"
+          pull: true
+          args:
+      register: ergo_container_image_build_result
+
+- name: Ensure Ergo container network is created via community.docker.docker_network
+  when: devture_systemd_docker_base_container_network_creation_method == 'ansible-module'
+  community.docker.docker_network:
+    enable_ipv6: "{{ devture_systemd_docker_base_ipv6_enabled }}"
+    name: "{{ ergo_container_network }}"
+    driver: bridge
+    driver_options: "{{ devture_systemd_docker_base_container_networks_driver_options }}"
+  register: ergo_network_creation_result
+
+- name: Ensure Ergo container network is created via ansible.builtin.command
+  when: devture_systemd_docker_base_container_network_creation_method == 'command'
+  ansible.builtin.command:
+    cmd: >-
+      {{ devture_systemd_docker_base_host_command_docker }} network create
+      {% if devture_systemd_docker_base_ipv6_enabled %}--ipv6{% endif %}
+      {{ devture_systemd_docker_base_container_networks_driver_options_string }}
+      {{ ergo_container_network }}
+  register: ergo_network_creation_result
+  changed_when: ergo_network_creation_result.rc == 0
+  failed_when: ergo_network_creation_result.rc != 0 and 'already exists' not in ergo_network_creation_result.stderr
+
+- name: Ensure Ergo systemd service is present
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/systemd/ergo.service.j2"
+    dest: "{{ devture_systemd_docker_base_systemd_path }}/{{ ergo_identifier }}.service"
+    mode: "0644"
+  register: ergo_systemd_service_result
+
+- name: Determine whether Ergo needs a restart
+  ansible.builtin.set_fact:
+    ergo_restart_necessary: >-
+      {{
+        ergo_support_files_result.changed | default(false)
+        or ergo_config_file_result.changed | default(false)
+        or ergo_systemd_service_result.changed | default(false)
+        or ergo_container_image_pull_result.changed | default(false)
+        or ergo_container_image_build_result.changed | default(false)
+      }}

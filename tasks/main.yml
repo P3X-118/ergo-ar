@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Perform Ergo installation tasks
+  when: ergo_enabled | bool
+  tags:
+    - setup-all
+    - setup-ergo
+    - install-all
+    - install-ergo
+  block:
+    - name: Validate Ergo configuration
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
+    - name: Install Ergo
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
+
+- name: Perform Ergo uninstallation tasks
+  when: not ergo_enabled | bool
+  tags:
+    - setup-all
+    - setup-ergo
+  block:
+    - name: Uninstall Ergo
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/uninstall.yml"
