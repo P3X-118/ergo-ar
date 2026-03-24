@@ -10,7 +10,7 @@
 ---
 # Project source code URL: https://github.com/ergochat/ergo
 
-ergo_enabled: true
+ergo_enabled: false
 
 ergo_identifier: ergo
 ergo_base_path: "/{{ ergo_identifier }}"
@@ -115,7 +115,7 @@ ergo_container_extra_arguments_custom: []
 
 # List of systemd services that the Ergo systemd service depends on
 ergo_systemd_required_services_list: "{{ ergo_systemd_required_services_list_default + ergo_systemd_required_services_list_auto + ergo_systemd_required_services_list_custom }}"
-ergo_systemd_required_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
+ergo_systemd_required_services_list_default: "{{ [sysd_docker_service] if sysd_docker_service else [] }}"
 ergo_systemd_required_services_list_auto: []
 ergo_systemd_required_services_list_custom: []
 
